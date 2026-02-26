@@ -10,6 +10,9 @@ export interface FieldNode {
   label?: string;
   value?: any;
   state?: FieldState;
+  diagnostics?: Array<{ message: string; severity: "error" | "warning" }>;
+  lastModifiedBy?: string;
+  timestamp?: number;
 }
 
 export interface FormNode {
@@ -71,18 +74,29 @@ export const FormTree: React.FC<FormTreeProps> = ({ forms = [], onToggleOverride
               {form.fields?.map((fld) => {
                 const key = `${form.formId}:${fld.fieldId}`;
                 const state = localStates[key] ?? fld.state ?? "normal";
+                const hasError = fld.diagnostics?.some(d => d.severity === "error");
+                const errorMsg = fld.diagnostics?.find(d => d.severity === "error")?.message;
+                const auditTrail =
+                  fld.lastModifiedBy && fld.timestamp
+                    ? `Last modified by ${fld.lastModifiedBy} at ${new Date(fld.timestamp).toLocaleString()}`
+                    : undefined;
                 return (
                   <div
                     key={key}
                     tabIndex={0}
                     onFocus={() => setFocused({ formId: form.formId, fieldId: fld.fieldId })}
-                    className="flex items-center justify-between gap-2 px-1 py-0.5 hover:bg-gray-100 rounded"
+                    className={
+                      `flex items-center justify-between gap-2 px-1 py-0.5 hover:bg-gray-100 rounded ${hasError ? 'border border-red-500 bg-red-50' : ''}`
+                    }
                   >
                     <div className="flex-1 truncate">
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-gray-600 truncate">{fld.label ?? fld.fieldId}</span>
                         <span className="text-[11px] text-gray-400">{String(fld.value ?? "")}</span>
+                        {hasError && <span className="text-red-500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg></span>}
                       </div>
+                      {errorMsg && <div className="text-xs text-red-600 mt-0.5">{errorMsg}</div>}
+                      {auditTrail && <div className="text-[11px] text-gray-400 mt-0.5">{auditTrail}</div>}
                     </div>
                     <div className="ml-2 text-[11px]">
                       {state === "normal" && <span className="text-gray-500">—</span>}

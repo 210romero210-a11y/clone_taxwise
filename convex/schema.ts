@@ -67,4 +67,34 @@ export default defineSchema({
   numbers: defineTable({
     value: v.number(),
   }),
+  fields: defineTable({
+    fieldId: v.string(),
+    formId: v.string(),
+    returnId: v.string(),
+    label: v.optional(v.string()),
+    type: v.optional(v.string()),
+    value: v.optional(v.any()),
+    calculated: v.optional(v.boolean()),
+    overridden: v.optional(v.boolean()),
+    updatedAt: v.optional(v.number()),
+    lastModifiedBy: v.optional(v.string()),
+  })
+    .index("byFieldId", ["fieldId"])
+    .index("byFormId", ["formId"])
+    .index("byReturnId", ["returnId"])
+    .index("byComposite", ["returnId", "formId", "fieldId"]),
+    
+  returns: defineTable({
+    returnId: v.string(),
+    taxpayerId: v.optional(v.string()),
+    year: v.number(),
+    forms: v.optional(v.any()),
+    events: v.optional(v.any()),
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    refund: v.optional(v.any()),
+    taxLiability: v.optional(v.any()),
+    diagnostics: v.optional(v.any()),
+  })
+    .index("byReturnId", ["returnId"]),
 });
