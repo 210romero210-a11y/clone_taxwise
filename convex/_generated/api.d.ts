@@ -8,8 +8,10 @@
  * @module
  */
 
+import type * as diagnostics from "../diagnostics.js";
 import type * as internalFunctions from "../internalFunctions.js";
-import type * as myFunctions from "../myFunctions.js";
+import type * as logic from "../logic.js";
+import type * as returns from "../returns.js";
 
 import type {
   ApiFromModules,
@@ -18,8 +20,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  diagnostics: typeof diagnostics;
   internalFunctions: typeof internalFunctions;
-  myFunctions: typeof myFunctions;
+  logic: typeof logic;
+  returns: typeof returns;
 }>;
 
 /**

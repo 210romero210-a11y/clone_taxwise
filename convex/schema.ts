@@ -96,5 +96,6 @@ export default defineSchema({
     taxLiability: v.optional(v.any()),
     diagnostics: v.optional(v.any()),
   })
-    .index("byReturnId", ["returnId"]),
+    .index("byReturnId", ["returnId"])
+    .index("byTaxpayerId", ["taxpayerId"]),
 });
