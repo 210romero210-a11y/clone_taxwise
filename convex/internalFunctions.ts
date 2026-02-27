@@ -4,15 +4,92 @@
   - runFlowThrough(returnId, event) : applies event-driven calculations
   - applyFieldUpdate(returnId, formId, fieldId, value, meta) : updates field, emits events
 */
+import { maybeEncryptValue } from '../lib/encryption';
+
+// Helper to call ctx.db.patch with the explicit table argument when available,
+// but fall back to the older two-argument signature used by unit test mocks.
+export async function safePatch(db: any, table: string, id: string, patch: any) {
+  try {
+    return await db.patch(table, id, patch);
+  } catch (e) {
+    // Fallback for test harnesses or older runtime helpers that expect (id, patch)
+    try {
+      return await db.patch(id, patch);
+    } catch (e2) {
+      throw e;
+    }
+  }
+}
 
 export async function runFlowThrough(_returnId: string, _event: any) {
   // placeholder
   return { applied: false, details: 'not implemented' };
 }
 
-export async function applyFieldUpdate(_returnId: string, _formId: string, _fieldId: string, _value: any, _meta?: any) {
-  // placeholder
-  return { updated: false, details: 'not implemented' };
+// Server-side helper to apply a user-driven field update, record an audit entry,
+// and return the updated field doc. This is written to be testable with a
+// mocked `db` object in Jest (no Convex runtime required for unit tests).
+export async function applyFieldUpdate(db: any, actor: { userId: string; name?: string; sessionId?: string; ipAddress?: string },
+  returnId: string, formId: string, fieldId: string, value: any, meta?: any) {
+  // Find the return
+  const returnDoc = await db.query('returns').withIndex('byReturnId', (q: any) => q.eq('returnId', returnId)).first();
+  if (!returnDoc) throw new Error('Return not found');
+  // Enforce locking
+  if (returnDoc.isLocked) throw new Error('Return is locked');
+
+  // Find the field document by composite keys
+  const fieldDoc = await db.query('fields')
+    .withIndex('byComposite', (q: any) => q.eq('returnId', returnId).eq('formId', formId).eq('fieldId', fieldId))
+    .first();
+  if (!fieldDoc) throw new Error('Field not found');
+
+  const previousValue = fieldDoc.value;
+  const timestamp = Date.now();
+
+  // Apply the patch (encrypt PII before storing when applicable)
+  const storedValue = maybeEncryptValue(value);
+  await safePatch(db, 'fields', fieldDoc._id, {
+    value: storedValue,
+    lastModifiedBy: actor.name || actor.userId,
+    updatedAt: timestamp,
+    overridden: meta && typeof meta.isOverride === 'boolean' ? meta.isOverride : fieldDoc.overridden,
+    estimated: meta && typeof meta.isEstimated === 'boolean' ? meta.isEstimated : fieldDoc.estimated,
+    calculated: false,
+  });
+
+  // Insert audit entry
+  try {
+    const prevStored = maybeEncryptValue(previousValue);
+    await db.insert('audit', {
+      returnId,
+      formId,
+      fieldId,
+      userId: actor.userId,
+      actor: actor.name || '',
+      sessionId: actor.sessionId || null,
+      ipAddress: actor.ipAddress || null,
+      action: 'field:update',
+      previousValue: prevStored,
+      newValue: storedValue,
+      createdAt: timestamp,
+    });
+  } catch (e) {
+    // Don't block the update if audit logging fails, but surface a warning in logs
+    // (In production you'd want to handle this differently)
+     
+    console.warn('Audit insert failed', e);
+  }
+
+  // Optionally append an event to the return for an append-only event stream
+  try {
+    const events = returnDoc.events || [];
+    events.push({ type: 'field:update', payload: { formId, fieldId, previousValue, newValue: value }, createdAt: timestamp, actor: actor.userId });
+    await safePatch(db, 'returns', returnDoc._id, { events });
+  } catch (e) {
+    // ignore event append failures for now
+  }
+
+  return { updated: true, _id: fieldDoc._id, previousValue, newValue: value };
 }
 
 // Helper: Given existing field documents and a list of updatedFields from the

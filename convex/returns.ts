@@ -30,7 +30,7 @@ import { calculateFederalTax } from "../lib/engine";
 // No need for internalMutation import
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { runFlowThrough } from "./internalFunctions";
+import { runFlowThrough, applyFieldUpdate, safePatch } from "./internalFunctions";
 
 export const updateField = mutation(
   {
@@ -42,33 +42,27 @@ export const updateField = mutation(
       lastModifiedBy: v.string(),
       // Optional metadata for override/estimated flags
       meta: v.optional(v.any()),
+      // Optional session context / client IP
+      sessionId: v.optional(v.string()),
+      ipAddress: v.optional(v.string()),
     },
     handler: async ({ db, auth }, args) => {
-      const { returnId, formId, fieldId, value, lastModifiedBy, meta } = args;
+      const { returnId, formId, fieldId, value, lastModifiedBy, meta, sessionId, ipAddress } = args as any;
       // Access control: only allow if user is authenticated
       const user = await auth.getUserIdentity();
       if (!user) throw new Error("Unauthorized");
-      const timestamp = Date.now();
-      // Find the field document by composite keys using index
-      const fieldDoc = await db.query("fields")
-        .withIndex("byComposite", (q) =>
-          q.eq("returnId", returnId)
-           .eq("formId", formId)
-           .eq("fieldId", fieldId)
-        )
-        .first();
-      if (!fieldDoc) throw new Error("Field not found");
-      // Apply value and optional metadata flags (override/estimated) atomically
-      await db.patch(fieldDoc._id, {
-        value,
-        lastModifiedBy,
-        updatedAt: timestamp,
-        // Respect explicit metadata when present; otherwise preserve existing flags
-        overridden: meta && typeof meta.isOverride === "boolean" ? meta.isOverride : fieldDoc.overridden,
-        estimated: meta && typeof meta.isEstimated === "boolean" ? meta.isEstimated : fieldDoc.estimated,
-        // When user writes a value directly, mark it as not-calculated
-        calculated: false,
-      });
+
+      // Session validation: require an active server-side session with MFA verified and recent activity
+      const sessions = await db.query('sessions').withIndex('byUserId', (q: any) => q.eq('userId', user.subject)).collect();
+      const now = Date.now();
+      const active = (sessions || []).find((s: any) => s.mfaVerified && (s.lastActivity || s.createdAt || 0) > now - 30 * 60 * 1000 && (!sessionId || s.sessionId === sessionId));
+      if (!active) throw new Error('Active MFA-verified session required');
+
+      // Compose actor object for audit
+      const actor = { userId: user.subject, name: lastModifiedBy || user.subject, sessionId: active.sessionId, ipAddress };
+
+      // Use server-side helper to apply the field update and record audit
+      await applyFieldUpdate(db, actor, returnId, formId, fieldId, value, meta);
 
       // Trigger recalculation; server-side logic will skip fields with overridden=true
       await recalculateReturnLogic(db, returnId);
@@ -82,8 +76,20 @@ export const recalculateReturn = mutation(
     handler: async ({ db }, args) => {
       await recalculateReturnLogic(db, args.returnId);
     }
-  }
+    }
 );
+
+export const setReturnLock = mutation({
+  args: { returnId: v.string(), locked: v.boolean() },
+  handler: async ({ db, auth }, args) => {
+    const user = await auth.getUserIdentity();
+    if (!user) throw new Error('Unauthorized');
+    const ret = await db.query('returns').withIndex('byReturnId', (q: any) => q.eq('returnId', args.returnId)).first();
+    if (!ret) throw new Error('Return not found');
+    await db.patch('returns', ret._id, { isLocked: !!args.locked, lockedAt: args.locked ? Date.now() : null, lockedBy: user.subject });
+    return { ok: true };
+  }
+});
 
 // Shared recalculation logic
 async function recalculateReturnLogic(db: { query: Function; patch: Function }, returnId: string) {
@@ -117,7 +123,7 @@ async function recalculateReturnLogic(db: { query: Function; patch: Function }, 
       if (fieldDoc.overridden) {
         continue;
       }
-      await db.patch(fieldDoc._id, {
+      await safePatch(db, 'fields', fieldDoc._id, {
         value: field.value,
         calculated: true,
         updatedAt: Date.now()
@@ -125,7 +131,7 @@ async function recalculateReturnLogic(db: { query: Function; patch: Function }, 
     }
   }
 
-  await db.patch(returnDoc._id, {
+  await safePatch(db, 'returns', returnDoc._id, {
     refund: result.refund,
     taxLiability: result.taxLiability,
     diagnostics: result.diagnostics

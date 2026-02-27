@@ -5,6 +5,7 @@
 import { internalMutation, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { parseDotKey, canonicalDot } from "../lib/fieldIds";
+import { safePatch } from './internalFunctions';
 
 
 // Example flat field map: maps source field to array of target fields
@@ -46,7 +47,7 @@ export const syncCalculations = internalMutation({
           )
           .first();
         if (fieldDoc) {
-          await db.patch(fieldDoc._id, { value });
+          await safePatch(db, 'fields', fieldDoc._id, { value });
         }
         await cascade(targetId, value);
       }

@@ -16,6 +16,7 @@ type FocusMapContextType = {
   getFieldState: (fieldId: string) => any;
   currentFieldId?: string;
   setCurrentField: (fieldId?: string) => void;
+  findNextRequired?: (current?: string) => string | undefined;
 };
 
 const FocusMapContext = createContext<FocusMapContextType | null>(null);
@@ -73,6 +74,23 @@ export function FocusMapProvider({ children }: { children: React.ReactNode }) {
     getFieldState,
     currentFieldId,
     setCurrentField: setCurrentField,
+    findNextRequired: (current?: string) => {
+      const order = orderRef.current;
+      if (!order || order.length === 0) return undefined;
+      const startIdx = current ? Math.max(0, order.indexOf(current) + 1) : 0;
+      for (let i = 0; i < order.length; i++) {
+        const idx = (startIdx + i) % order.length;
+        const id = order[idx];
+        const entry = registryRef.current.get(id);
+        if (!entry || !entry.getState) continue;
+        const st = entry.getState();
+        const required = !!st?.required || !!st?.isRequired || !!st?.requiredField;
+        const empty = st?.value === null || st?.value === undefined || String(st?.value || '').trim() === '';
+        const hasError = (st?.diagnostics || []).some((d: any) => d.severity === 'error');
+        if (required && (empty || hasError)) return id;
+      }
+      return undefined;
+    },
   };
 
   return <FocusMapContext.Provider value={value}>{children}</FocusMapContext.Provider>;

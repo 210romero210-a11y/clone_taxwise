@@ -95,7 +95,44 @@ export default defineSchema({
     refund: v.optional(v.any()),
     taxLiability: v.optional(v.any()),
     diagnostics: v.optional(v.any()),
+    isLocked: v.optional(v.boolean()),
+    lockedAt: v.optional(v.number()),
+    lockedBy: v.optional(v.string()),
   })
     .index("byReturnId", ["returnId"])
     .index("byTaxpayerId", ["taxpayerId"]),
+  // Audit trail table for WISP / Publication 1345 compliance
+  audit: defineTable({
+    returnId: v.optional(v.string()),
+    formId: v.optional(v.string()),
+    fieldId: v.optional(v.string()),
+    userId: v.optional(v.string()),
+    actor: v.optional(v.string()),
+    sessionId: v.optional(v.string()),
+    ipAddress: v.optional(v.string()),
+    action: v.optional(v.string()),
+    previousValue: v.optional(v.any()),
+    newValue: v.optional(v.any()),
+    createdAt: v.optional(v.number()),
+  })
+    .index("byReturnId", ["returnId"])
+    .index("byUserId", ["userId"]),
+  // Sessions table for server-side session management and MFA tracking
+  sessions: defineTable({
+    sessionId: v.string(),
+    userId: v.string(),
+    mfaVerified: v.optional(v.boolean()),
+    lastActivity: v.optional(v.number()),
+    createdAt: v.optional(v.number()),
+  }).index("bySessionId", ["sessionId"]).index("byUserId", ["userId"]),
+  // Files table to store generated PDFs (base64) and attachments
+  files: defineTable({
+    returnId: v.optional(v.string()),
+    filename: v.string(),
+    mimeType: v.optional(v.string()),
+    dataBase64: v.optional(v.string()),
+    storageId: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    createdAt: v.optional(v.number()),
+  }).index("byReturnId", ["returnId"]),
 });

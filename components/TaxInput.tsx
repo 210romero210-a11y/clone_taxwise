@@ -128,7 +128,9 @@ const TaxInput: React.FC<TaxInputProps> = ({
     }
   };
 
-  const bgClass = localOverride
+  const bgClass = hasError
+    ? "bg-red-50 border-red-300"
+    : localOverride
     ? "bg-pink-50 border-pink-300"
     : localEstimated
     ? "bg-yellow-50 border-yellow-300"
