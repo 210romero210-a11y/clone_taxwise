@@ -20,23 +20,27 @@ const DiagnosticList: React.FC<DiagnosticListProps> = ({ diagnostics, onSelectFi
       <ScrollArea.Root className="h-[80vh] w-full overflow-hidden">
         <ScrollArea.Viewport className="h-full w-full">
           <ul className="space-y-1">
-            {diagnostics.map((diag, i) => (
-              <li
-                key={i}
-                className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-100 ${
-                  diag.severity === "Error"
-                    ? "text-red-700 border-l-4 border-red-500 bg-red-50"
-                    : "text-yellow-700 border-l-4 border-yellow-400 bg-yellow-50"
-                }`}
-                onClick={() => onSelectField?.(diag.fieldId)}
-                tabIndex={0}
-                aria-label={`Diagnostic: ${diag.message}`}
-              >
-                <span className="font-bold text-xs w-12">{diag.severity}</span>
-                <span className="flex-1 text-xs truncate">{diag.message}</span>
-                <span className="text-xs text-gray-400">{diag.form}</span>
-              </li>
-            ))}
+            {diagnostics.map((diag, i) => {
+              const sev = String(diag.severity).toLowerCase();
+              const isError = sev === "error";
+              return (
+                <li
+                  key={i}
+                  className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-100 ${
+                    isError
+                      ? "text-red-700 border-l-4 border-red-500 bg-red-50"
+                      : "text-yellow-700 border-l-4 border-yellow-400 bg-yellow-50"
+                  }`}
+                  onClick={() => onSelectField?.(diag.fieldId)}
+                  tabIndex={0}
+                  aria-label={`Diagnostic: ${diag.message}`}
+                >
+                  <span className="font-bold text-xs w-12">{diag.severity}</span>
+                  <span className="flex-1 text-xs truncate">{diag.message}</span>
+                  <span className="text-xs text-gray-400">{diag.form}</span>
+                </li>
+              );
+            })}
           </ul>
         </ScrollArea.Viewport>
         <ScrollArea.Scrollbar orientation="vertical" className="ScrollAreaScrollbar" />

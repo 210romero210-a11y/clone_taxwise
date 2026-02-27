@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalQuery } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
 import { runDiagnostics } from "../lib/validators";
 import { FieldDoc } from "./schema";
 import { Id } from "./_generated/dataModel";
@@ -14,6 +14,19 @@ export const runDiagnosticsForReturn = internalQuery({
       .withIndex("byComposite", (q: any) => q.eq("returnId", returnId))
       .collect();
     // Run diagnostics
+    return runDiagnostics(fields);
+  },
+});
+
+// Public query wrapper so the client can fetch diagnostics for a return
+export const getDiagnosticsForReturn = query({
+  args: { returnId: v.id("returns") },
+  handler: async ({ db }: any, args: { returnId: Id<"returns"> }) => {
+    const { returnId } = args;
+    const fields: FieldDoc[] = await db
+      .query("fields")
+      .withIndex("byComposite", (q: any) => q.eq("returnId", returnId))
+      .collect();
     return runDiagnostics(fields);
   },
 });

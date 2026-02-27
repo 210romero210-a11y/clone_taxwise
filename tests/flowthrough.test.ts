@@ -5,13 +5,12 @@ describe('Flow-Through Logic Orchestrator', () => {
     // Arrange: mock DB state
     const mockDB = {
       fields: {
-        [key: string]: { value: any },
-        'SchC_netProfit': { value: 10000 },
-        'SchSE_seTax': { value: 0 },
-        '1040_totalIncome': { value: 0 },
+        'SchC.netProfit': { value: 10000 },
+        'SchSE.seTax': { value: 0 },
+        '1040.totalIncome': { value: 0 },
       },
       patch: function (_collection: string, query: { fieldId: string }, update: { value: any }) {
-        this.fields[query.fieldId].value = update.value;
+        (this.fields as any)[query.fieldId].value = update.value;
       },
       get: function (_collection: string, _id: string) {
         return { forms: {} };
@@ -26,11 +25,11 @@ describe('Flow-Through Logic Orchestrator', () => {
         cascade(targetId, value);
       });
     };
-    cascade('SchC_netProfit', 10000);
+    cascade('SchC.netProfit', 10000);
 
     // Assert: SE tax and 1040 total income updated
-    expect(mockDB.fields['SchSE_seTax'].value).toBe(10000);
-    expect(mockDB.fields['1040_totalIncome'].value).toBe(10000);
+    expect(mockDB.fields['SchSE.seTax'].value).toBe(10000);
+    expect(mockDB.fields['1040.totalIncome'].value).toBe(10000);
   });
 
   test('W-2 salary applies Standard Deduction and calculates Taxable Income', () => {

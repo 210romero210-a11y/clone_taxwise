@@ -40,9 +40,11 @@ export const updateField = mutation(
       fieldId: v.string(),
       value: v.any(),
       lastModifiedBy: v.string(),
+      // Optional metadata for override/estimated flags
+      meta: v.optional(v.any()),
     },
     handler: async ({ db, auth }, args) => {
-      const { returnId, formId, fieldId, value, lastModifiedBy } = args;
+      const { returnId, formId, fieldId, value, lastModifiedBy, meta } = args;
       // Access control: only allow if user is authenticated
       const user = await auth.getUserIdentity();
       if (!user) throw new Error("Unauthorized");
@@ -56,11 +58,19 @@ export const updateField = mutation(
         )
         .first();
       if (!fieldDoc) throw new Error("Field not found");
+      // Apply value and optional metadata flags (override/estimated) atomically
       await db.patch(fieldDoc._id, {
         value,
         lastModifiedBy,
-        updatedAt: timestamp
+        updatedAt: timestamp,
+        // Respect explicit metadata when present; otherwise preserve existing flags
+        overridden: meta && typeof meta.isOverride === "boolean" ? meta.isOverride : fieldDoc.overridden,
+        estimated: meta && typeof meta.isEstimated === "boolean" ? meta.isEstimated : fieldDoc.estimated,
+        // When user writes a value directly, mark it as not-calculated
+        calculated: false,
       });
+
+      // Trigger recalculation; server-side logic will skip fields with overridden=true
       await recalculateReturnLogic(db, returnId);
     }
   }
@@ -103,8 +113,13 @@ async function recalculateReturnLogic(db: { query: Function; patch: Function }, 
       )
       .first();
     if (fieldDoc) {
+      // Skip fields the user has explicitly overridden in the UI
+      if (fieldDoc.overridden) {
+        continue;
+      }
       await db.patch(fieldDoc._id, {
         value: field.value,
+        calculated: true,
         updatedAt: Date.now()
       });
     }

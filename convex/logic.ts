@@ -4,13 +4,15 @@
 
 import { internalMutation, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { parseDotKey, canonicalDot } from "../lib/fieldIds";
 
 
 // Example flat field map: maps source field to array of target fields
 export const FIELD_MAP: Record<string, string[]> = {
-  "SchC_Line31": ["Sch1_Line3"],
-  "Sch1_Line3": ["1040_Line8"],
-  "SchC_netProfit": ["SchSE_seTax", "1040_totalIncome"],
+  // canonical dot-style keys (form.field)
+  "SchC.Line31": ["Sch1.Line3"],
+  "Sch1.Line3": ["1040.Line8"],
+  "SchC.netProfit": ["SchSE.seTax", "1040.totalIncome"],
   // Add more as needed, using IRS MeF tags
 };
 
@@ -29,16 +31,18 @@ export const syncCalculations = internalMutation({
       .first();
     if (!returnDoc) throw new Error("Return not found");
 
-    // Flat lookup for cascading updates
+    // Flat lookup for cascading updates. FIELD_MAP uses canonical dot keys (form.field)
     const cascade = async (fieldId: string, value: any) => {
-      const targets = FIELD_MAP[fieldId] || [];
+      const canonical = canonicalDot(fieldId);
+      const targets = FIELD_MAP[canonical] || [];
       for (const targetId of targets) {
+        const parsed = parseDotKey(targetId);
         // Find the field document by composite keys using index
         const fieldDoc = await db.query("fields")
           .withIndex("byComposite", (q: any) =>
             q.eq("returnId", args.returnId)
-             .eq("formId", "") // If you have formId context, use it here
-             .eq("fieldId", targetId)
+             .eq("formId", parsed.formId)
+             .eq("fieldId", parsed.fieldId)
           )
           .first();
         if (fieldDoc) {
@@ -48,8 +52,8 @@ export const syncCalculations = internalMutation({
       }
     };
 
-    // Start cascading from updated field
-    await cascade(args.updatedFieldId, args.value);
+    // Start cascading from updated field (ensure canonical key)
+    await cascade(canonicalDot(args.updatedFieldId), args.value);
 
     // Optionally recalculate totals (e.g., 1040 total income)
     // ...existing code...

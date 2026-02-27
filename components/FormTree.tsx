@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useState, useCallback } from "react";
 
 // Minimal FormTree component using Tailwind CSS and Radix-style primitives.
