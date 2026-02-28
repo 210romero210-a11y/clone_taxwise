@@ -1,4 +1,54 @@
-import { query } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { calculateFederalTax } from "../lib/engine";
+import { runFlowThrough, applyFieldUpdate, safePatch } from "./internalFunctions";
+
+// Public query: get a single return by ID
+export const getReturn = query({
+  args: { returnId: v.string() },
+  handler: async ({ db, auth }, args) => {
+    const user = await auth.getUserIdentity();
+    if (!user) throw new Error("Unauthorized");
+    const returnDoc = await db
+      .query("returns")
+      .withIndex("byReturnId", (q) => q.eq("returnId", args.returnId))
+      .first();
+    if (!returnDoc) return null;
+    // Verify user owns this return
+    if (returnDoc.taxpayerId && returnDoc.taxpayerId !== user.subject) {
+      throw new Error("Unauthorized");
+    }
+    return returnDoc;
+  },
+});
+
+// Public query: get running totals aggregate for sub-100ms Refund Monitor
+export const getAggregate = query({
+  args: { returnId: v.string() },
+  handler: async ({ db, auth }, args) => {
+    const user = await auth.getUserIdentity();
+    if (!user) throw new Error("Unauthorized");
+    const returnDoc = await db
+      .query("returns")
+      .withIndex("byReturnId", (q) => q.eq("returnId", args.returnId))
+      .first();
+    if (!returnDoc) return null;
+    // Return cached aggregate if available, otherwise compute from return
+    const aggregate = await db
+      .query("aggregates")
+      .withIndex("byReturnId", (q) => q.eq("returnId", args.returnId))
+      .first();
+    if (aggregate) return aggregate;
+    // Fallback: return basic totals from return doc
+    return {
+      returnId: args.returnId,
+      refund: returnDoc.refund ?? 0,
+      taxLiability: returnDoc.taxLiability ?? 0,
+      lastUpdated: Date.now(),
+    };
+  },
+});
+
 // Public query: list all returns (with forms and fields) for the authenticated user
 export const listUserReturns = query({
   args: {},
@@ -25,13 +75,6 @@ export const listUserReturns = query({
     return results;
   },
 });
-// Convex mutation: updateField and trigger recalculateReturn
-import { calculateFederalTax } from "../lib/engine";
-// No need for internalMutation import
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-import { runFlowThrough, applyFieldUpdate, safePatch } from "./internalFunctions";
-
 export const updateField = mutation(
   {
     args: {

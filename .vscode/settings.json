@@ -1,6 +1,11 @@
 {
     "cSpell.words": [
+        "codegen",
+        "flowthrough",
+        "predev",
+        "Recalc",
         "taxwise",
         "unrs"
-    ]
+    ],
+    "codium.codeCompletion.enable": true
 }

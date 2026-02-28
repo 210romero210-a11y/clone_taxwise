@@ -135,4 +135,16 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     createdAt: v.optional(v.number()),
   }).index("byReturnId", ["returnId"]),
+  
+  // Aggregates table for running totals (sub-100ms Refund Monitor updates)
+  aggregates: defineTable({
+    returnId: v.string(),
+    totalIncome: v.optional(v.number()),
+    totalDeductions: v.optional(v.number()),
+    totalPayments: v.optional(v.number()),
+    totalCredits: v.optional(v.number()),
+    taxLiability: v.optional(v.number()),
+    refund: v.optional(v.number()),
+    lastUpdated: v.optional(v.number()),
+  }).index("byReturnId", ["returnId"]),
 });

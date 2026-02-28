@@ -21,6 +21,7 @@ export interface TaxInputProps {
   lastModifiedBy?: string;
   timestamp?: number;
   onChange?: (value: any) => void;
+  onFocus?: () => void;
   label?: string;
 }
 
@@ -37,6 +38,7 @@ const TaxInput: React.FC<TaxInputProps> = ({
   lastModifiedBy,
   timestamp,
   onChange,
+  onFocus,
   label,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +149,10 @@ const TaxInput: React.FC<TaxInputProps> = ({
           data-fieldid={fieldId}
           className={clsx("w-full px-2 py-1 rounded border text-sm transition", bgClass)}
           value={optimisticValue ?? ""}
-          onFocus={() => setCurrentField(fieldId)}
+          onFocus={() => {
+            setCurrentField(fieldId);
+            onFocus?.();
+          }}
           onChange={(e) => {
             setOptimisticValue(e.target.value);
             if (onChange) onChange(e.target.value);

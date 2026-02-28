@@ -1,43 +1,59 @@
 "use client";
 
-"use client";
-
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { FocusMapProvider } from "../hooks/useFocusMap";
 import useTaxKeyboard from "../hooks/useTaxKeyboard";
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { ReturnProvider } from "../contexts/ReturnContext";
-import RefundMonitor from './RefundMonitor';
+import { UIModeProvider, useUIMode } from "../contexts/UIModeContext";
+import RefundMonitor from "./RefundMonitor";
+import UIModeToggle from "./UIModeToggle";
+import InterviewModeWizard from "./InterviewModeWizard";
+import FormModeGrid from "./FormModeGrid";
+import ValidationPanel from "./ValidationPanel";
+import TimelineViewer from "./TimelineViewer";
+import clsx from "clsx";
 
+interface TaxAppShellProps {
+  returnId?: string;
+  children?: React.ReactNode;
+}
+
+// Main shell with all providers
 export default function TaxAppShell({
   returnId,
   children,
-}: {
-  returnId?: string;
-  children: React.ReactNode;
-}) {
+}: TaxAppShellProps) {
   return (
-    <FocusMapProvider>
-      <ReturnProvider returnId={returnId}>
-        <TaxKeyboardInner returnId={returnId}>{children}</TaxKeyboardInner>
-      </ReturnProvider>
-    </FocusMapProvider>
+    <UIModeProvider defaultMode="form">
+      <FocusMapProvider>
+        <ReturnProvider returnId={returnId}>
+          <TaxAppShellInner returnId={returnId}>
+            {children}
+          </TaxAppShellInner>
+        </ReturnProvider>
+      </FocusMapProvider>
+    </UIModeProvider>
   );
 }
 
-function TaxKeyboardInner({
+// Inner component with keyboard and mode handling
+function TaxAppShellInner({
   returnId,
   children,
 }: {
   returnId?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
+  const { mode } = useUIMode();
+  
   useTaxKeyboard(returnId);
 
   const createSession = useMutation(api.sessions.createSession);
   const pingSession = useMutation(api.sessions.pingSession);
 
+  // Session management
   useEffect(() => {
     let sid: string | null = null;
     (async () => {
@@ -69,10 +85,49 @@ function TaxKeyboardInner({
     };
   }, [createSession, pingSession]);
 
+  // Show children if provided, otherwise show default dual-mode view
+  if (children) {
+    return <>{children}</>;
+  }
+
+  // Default dual-mode interface
   return (
-    <>
-      <RefundMonitor />
-      {children}
-    </>
+    <div className="flex flex-col h-screen">
+      {/* Header with Refund Monitor and Mode Toggle */}
+      <header className="flex-shrink-0">
+        <RefundMonitor />
+        <div className="bg-white border-b px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-semibold text-gray-900">TaxWise Clone</h1>
+            <UIModeToggle variant="tabs" />
+          </div>
+          <div className="text-sm text-gray-500">
+            {mode === "interview" ? "Interview Mode" : "Form Mode"}
+          </div>
+        </div>
+      </header>
+
+      {/* Main content area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left sidebar - Validation Panel */}
+        <aside className="w-72 bg-white border-r border-gray-200 overflow-auto flex-shrink-0">
+          <ValidationPanel returnId={returnId} />
+        </aside>
+
+        {/* Main content - Interview or Form Mode */}
+        <main className="flex-1 overflow-hidden bg-gray-50">
+          {mode === "interview" ? (
+            <InterviewModeWizard returnId={returnId} />
+          ) : (
+            <FormModeGrid returnId={returnId} />
+          )}
+        </main>
+
+        {/* Right sidebar - Timeline (Flight Recorder) */}
+        <aside className="w-80 bg-white border-l border-gray-200 overflow-hidden flex-shrink-0">
+          <TimelineViewer returnId={returnId} />
+        </aside>
+      </div>
+    </div>
   );
 }
