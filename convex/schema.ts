@@ -146,13 +146,47 @@ export default defineSchema({
   // Files table to store generated PDFs (base64) and attachments
   files: defineTable({
     returnId: v.optional(v.string()),
+    taxpayerId: v.optional(v.string()),
     filename: v.string(),
     mimeType: v.optional(v.string()),
     dataBase64: v.optional(v.string()),
     storageId: v.optional(v.string()),
+    // Vault metadata
+    documentType: v.optional(v.string()), // "W2" | "1099" | "ID" | "SSN" | "OTHER"
+    documentCategory: v.optional(v.string()), // "income" | "deduction" | "identity" | "supporting"
+    associatedTaxpayer: v.optional(v.string()), // "primary" | "spouse" | "dependent"
+    accessKey: v.optional(v.string()), // Temporary access key for secure viewing
+    accessKeyExpiresAt: v.optional(v.number()), // When access key expires
     metadata: v.optional(v.any()),
     createdAt: v.optional(v.number()),
-  }).index("byReturnId", ["returnId"]),
+  }).index("byReturnId", ["returnId"]).index("byTaxpayerId", ["taxpayerId"]).index("byDocumentType", ["documentType"]),
+  
+  // OCR Scans table for tracking AI extraction
+  ocrScans: defineTable({
+    returnId: v.string(),
+    fileId: v.string(),
+    userId: v.string(),
+    documentType: v.string(), // Type of document scanned
+    status: v.string(), // "pending" | "processing" | "completed" | "failed"
+    modelUsed: v.optional(v.string()), // Which AI model was used
+    extractedData: v.optional(v.any()), // Raw extracted data from AI
+    mappedFields: v.optional(v.any()), // Fields mapped to tax forms
+    confidence: v.optional(v.number()), // Confidence score 0-1
+    errorMessage: v.optional(v.string()),
+    retryCount: v.optional(v.number()),
+    processingTimeMs: v.optional(v.number()),
+    createdAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+  }).index("byReturnId", ["returnId"]).index("byFileId", ["fileId"]).index("byUserId", ["userId"]).index("byStatus", ["status"]),
+  
+  // Rate limiting table for OCR API cost control
+  rateLimits: defineTable({
+    userId: v.string(),
+    ocrCount: v.number(), // Number of OCR requests in window
+    windowStart: v.number(), // Start of current window (hourly)
+    windowEnd: v.number(), // End of current window
+    lastOcrAt: v.optional(v.number()),
+  }).index("byUserId", ["userId"]),
   
   // Aggregates table for running totals (sub-100ms Refund Monitor updates)
   aggregates: defineTable({
