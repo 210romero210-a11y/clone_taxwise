@@ -9,6 +9,7 @@ import { ReturnProvider } from "../contexts/ReturnContext";
 import { UIModeProvider, useUIMode } from "../contexts/UIModeContext";
 import RefundMonitor from "./RefundMonitor";
 import UIModeToggle from "./UIModeToggle";
+import LocaleToggle from "./LocaleToggle";
 import InterviewModeWizard from "./InterviewModeWizard";
 import FormModeGrid from "./FormModeGrid";
 import ValidationPanel from "./ValidationPanel";
@@ -54,11 +55,19 @@ function TaxAppShellInner({
   const pingSession = useMutation(api.sessions.pingSession);
 
   // Session management
+  // NOTE: In production, mfaVerified should come from auth context after proper MFA verification
+  // For now, this creates a session in dev mode. In production, implement proper auth flow.
+  const sessionNeedsMfa = !process.env.NEXT_PUBLIC_WORKOS_CLIENT_ID; // Dev mode check
   useEffect(() => {
     let sid: string | null = null;
     (async () => {
       try {
-        const res: any = await createSession({ mfaVerified: true });
+        // In production with WorkOS, session should be created after proper MFA verification
+        // The mfaVerified flag should reflect actual auth state, not be hardcoded
+        const res: any = await createSession({ 
+          mfaVerified: sessionNeedsMfa, // Only true in dev mode
+          ipAddress: typeof window !== 'undefined' ? undefined : undefined
+        });
         sid = res?.sessionId;
         if (sid) localStorage.setItem('sessionId', sid);
       } catch (e) {
@@ -101,8 +110,15 @@ function TaxAppShellInner({
             <h1 className="text-lg font-semibold text-gray-900">TaxWise Clone</h1>
             <UIModeToggle variant="tabs" />
           </div>
-          <div className="text-sm text-gray-500">
-            {mode === "interview" ? "Interview Mode" : "Form Mode"}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="w-2 h-2 rounded-full bg-green-500" title="Session active" />
+              <span className="text-gray-600">Active</span>
+            </div>
+            <LocaleToggle variant="tabs" size="sm" />
+            <div className="text-sm text-gray-500">
+              {mode === "interview" ? "Interview Mode" : "Form Mode"}
+            </div>
           </div>
         </div>
       </header>

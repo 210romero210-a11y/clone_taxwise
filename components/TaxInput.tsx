@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useFocusMap } from "../hooks/useFocusMap";
+import { useTranslation } from "../contexts/LocaleContext";
 
 export interface TaxInputProps {
   returnId?: string;
@@ -48,6 +49,7 @@ const TaxInput: React.FC<TaxInputProps> = ({
   const [localEstimated, setLocalEstimated] = useState<boolean>(!!estimated);
 
   const { registerField, unregisterField, setCurrentField, focusNext, getFieldState } = useFocusMap();
+  const { t } = useTranslation();
 
   const updateField = useMutation(api.returns.updateField);
 
@@ -142,7 +144,7 @@ const TaxInput: React.FC<TaxInputProps> = ({
 
   return (
     <div className="mb-2">
-      <label className="block text-xs font-medium mb-1">{label}</label>
+      <label className="block text-xs font-medium mb-1">{label || t(`fields.${fieldId}`) || fieldId}</label>
       <div className="relative">
         <input
           ref={inputRef}

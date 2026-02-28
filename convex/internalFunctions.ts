@@ -5,6 +5,12 @@
   - applyFieldUpdate(returnId, formId, fieldId, value, meta) : updates field, emits events
 */
 import { maybeEncryptValue } from '../lib/encryption';
+import { 
+  hashEntry, 
+  getLatestHash, 
+  TriggerSource,
+  AUDIT_ACTIONS 
+} from '../lib/audit/hashChain';
 
 // Helper to call ctx.db.patch with the explicit table argument when available,
 // but fall back to the older two-argument signature used by unit test mocks.
@@ -29,8 +35,21 @@ export async function runFlowThrough(_returnId: string, _event: any) {
 // Server-side helper to apply a user-driven field update, record an audit entry,
 // and return the updated field doc. This is written to be testable with a
 // mocked `db` object in Jest (no Convex runtime required for unit tests).
-export async function applyFieldUpdate(db: any, actor: { userId: string; name?: string; sessionId?: string; ipAddress?: string },
-  returnId: string, formId: string, fieldId: string, value: any, meta?: any) {
+// 
+// triggerSource: How the field was updated - "manual" | "ai_extraction" | "import" | "calculation" | "filing"
+export async function applyFieldUpdate(
+  db: any, 
+  actor: { userId: string; name?: string; sessionId?: string; ipAddress?: string },
+  returnId: string, 
+  formId: string, 
+  fieldId: string, 
+  value: any, 
+  meta?: { 
+    isOverride?: boolean; 
+    isEstimated?: boolean;
+    triggerSource?: TriggerSource;
+  }
+) {
   // Find the return
   const returnDoc = await db.query('returns').withIndex('byReturnId', (q: any) => q.eq('returnId', returnId)).first();
   if (!returnDoc) throw new Error('Return not found');
@@ -45,6 +64,7 @@ export async function applyFieldUpdate(db: any, actor: { userId: string; name?: 
 
   const previousValue = fieldDoc.value;
   const timestamp = Date.now();
+  const triggerSource = meta?.triggerSource || 'manual';
 
   // Apply the patch (encrypt PII before storing when applicable)
   const storedValue = maybeEncryptValue(value);
@@ -57,7 +77,23 @@ export async function applyFieldUpdate(db: any, actor: { userId: string; name?: 
     calculated: false,
   });
 
-  // Insert audit entry
+  // Get previous hash for chain
+  const existingEntries = await db.query('audit')
+    .withIndex('byReturnId', (q: any) => q.eq('returnId', returnId))
+    .collect();
+  const previousHash = await getLatestHash(existingEntries);
+
+  // Compute hash for this entry
+  const hashChainEntry = await hashEntry(previousHash, {
+    returnId,
+    formId,
+    fieldId,
+    userId: actor.userId,
+    action: AUDIT_ACTIONS.FIELD_UPDATE,
+    timestamp,
+  });
+
+  // Insert audit entry with hash chain
   try {
     const prevStored = maybeEncryptValue(previousValue);
     await db.insert('audit', {
@@ -68,7 +104,9 @@ export async function applyFieldUpdate(db: any, actor: { userId: string; name?: 
       actor: actor.name || '',
       sessionId: actor.sessionId || null,
       ipAddress: actor.ipAddress || null,
-      action: 'field:update',
+      action: AUDIT_ACTIONS.FIELD_UPDATE,
+      triggerSource,
+      hashChainEntry,
       previousValue: prevStored,
       newValue: storedValue,
       createdAt: timestamp,
@@ -83,7 +121,7 @@ export async function applyFieldUpdate(db: any, actor: { userId: string; name?: 
   // Optionally append an event to the return for an append-only event stream
   try {
     const events = returnDoc.events || [];
-    events.push({ type: 'field:update', payload: { formId, fieldId, previousValue, newValue: value }, createdAt: timestamp, actor: actor.userId });
+    events.push({ type: 'field:update', payload: { formId, fieldId, previousValue, newValue: value }, createdAt: timestamp, actor: actor.userId, triggerSource });
     await safePatch(db, 'returns', returnDoc._id, { events });
   } catch (e) {
     // ignore event append failures for now

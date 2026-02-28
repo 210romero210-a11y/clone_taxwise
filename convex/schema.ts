@@ -50,6 +50,7 @@ export const Collections = {
   Forms: "forms",
   Fields: "fields",
   Events: "events",
+  Filings: "filings",
 };
 
 // Notes for developers:
@@ -111,19 +112,36 @@ export default defineSchema({
     sessionId: v.optional(v.string()),
     ipAddress: v.optional(v.string()),
     action: v.optional(v.string()),
+    // IRS Publication 1345: trigger source for field changes
+    triggerSource: v.optional(v.string()), // "manual" | "ai_extraction" | "import" | "calculation" | "filing"
+    // Hash chain for tamper evidence (IRS Publication 1345)
+    hashChainEntry: v.optional(v.string()), // SHA-256 hash of previous entry
     previousValue: v.optional(v.any()),
     newValue: v.optional(v.any()),
+    // 7-year retention support
     createdAt: v.optional(v.number()),
+    archivedAt: v.optional(v.number()), // Marked for archival after 7 years
   })
     .index("byReturnId", ["returnId"])
-    .index("byUserId", ["userId"]),
+    .index("byUserId", ["userId"])
+    .index("byAction", ["action"])
+    .index("byCreatedAt", ["createdAt"])
+    .index("byReturnIdAndCreatedAt", ["returnId", "createdAt"]),
   // Sessions table for server-side session management and MFA tracking
+  // Extended with IRS Publication 1345 compliant fields
   sessions: defineTable({
     sessionId: v.string(),
     userId: v.string(),
     mfaVerified: v.optional(v.boolean()),
     lastActivity: v.optional(v.number()),
     createdAt: v.optional(v.number()),
+    // IRS Publication 1345 enhanced fields
+    role: v.optional(v.string()), // 'taxpayer' | 'preparer' | 'admin'
+    ipAddress: v.optional(v.string()), // Bound IP for session security
+    reauthRequired: v.optional(v.boolean()), // 12-hour re-auth for preparers
+    reauthAt: v.optional(v.number()), // Timestamp when re-auth is required
+    status: v.optional(v.string()), // 'active' | 'expired' | 'reauth_required' | 'terminated'
+    tokenHash: v.optional(v.string()), // Hash of session token for validation
   }).index("bySessionId", ["sessionId"]).index("byUserId", ["userId"]),
   // Files table to store generated PDFs (base64) and attachments
   files: defineTable({
@@ -147,4 +165,36 @@ export default defineSchema({
     refund: v.optional(v.number()),
     lastUpdated: v.optional(v.number()),
   }).index("byReturnId", ["returnId"]),
+
+  // MeF Filing table for IRS electronic filing
+  filings: defineTable({
+    filingId: v.string(),
+    returnId: v.string(),
+    submissionId: v.optional(v.string()),
+    taxYear: v.number(),
+    // Filing status: pending, prepared, transmitted, accepted, rejected, error
+    status: v.string(),
+    // Whether this is a test filing (for MeF test environment)
+    testMode: v.optional(v.boolean()),
+    // IRS Acceptance/Receipt number
+    acknowledgmentNumber: v.optional(v.string()),
+    // Timestamp when submitted to IRS
+    submittedAt: v.optional(v.number()),
+    // Timestamp when status last changed
+    statusChangedAt: v.optional(v.number()),
+    // IRS response message
+    irsMessage: v.optional(v.string()),
+    // List of errors if rejected (serialized JSON)
+    errors: v.optional(v.any()),
+    // XML payload sent to IRS
+    xmlPayload: v.optional(v.string()),
+    // XML response received from IRS
+    xmlResponse: v.optional(v.string()),
+    // Number of retry attempts
+    retryCount: v.optional(v.number()),
+    // Created timestamp
+    createdAt: v.optional(v.number()),
+    // Updated timestamp
+    updatedAt: v.optional(v.number()),
+  }).index("byFilingId", ["filingId"]).index("byReturnId", ["returnId"]).index("byStatus", ["status"]).index("byCreatedAt", ["createdAt"]),
 });

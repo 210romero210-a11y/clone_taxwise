@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useDiagnosticNavigation } from "../hooks/useDiagnosticNavigation";
 
 // Minimal FormTree component using Tailwind CSS and Radix-style primitives.
 // This component is compact / high-density for tax workflows.
@@ -31,6 +32,7 @@ export interface FormTreeProps {
 export const FormTree: React.FC<FormTreeProps> = ({ forms = [], onToggleOverride }) => {
   const [focused, setFocused] = useState<{ formId: string; fieldId: string } | null>(null);
   const [localStates, setLocalStates] = useState<Record<string, FieldState>>({});
+  const { navigateToField } = useDiagnosticNavigation();
 
   useEffect(() => {
     // Initialize local states from props
@@ -87,8 +89,9 @@ export const FormTree: React.FC<FormTreeProps> = ({ forms = [], onToggleOverride
                     key={key}
                     tabIndex={0}
                     onFocus={() => setFocused({ formId: form.formId, fieldId: fld.fieldId })}
+                    onClick={() => hasError && navigateToField(fld.fieldId)}
                     className={
-                      `flex items-center justify-between gap-2 px-1 py-0.5 hover:bg-gray-100 rounded ${hasError ? 'border border-red-500 bg-red-50' : ''}`
+                      `flex items-center justify-between gap-2 px-1 py-0.5 hover:bg-gray-100 rounded cursor-pointer ${hasError ? 'border border-red-500 bg-red-50 hover:bg-red-100' : ''}`
                     }
                   >
                     <div className="flex-1 truncate">

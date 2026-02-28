@@ -3,10 +3,19 @@ import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 import * as fs from 'fs';
 import * as path from 'path';
 import { maybeDecryptValue } from './encryption';
+import { Locale, getSpanishFormTitle, formatCurrency as formatCurrencyHelper } from './i18n/translator';
 
 // Flexible mappings use `any` intentionally for speed and to avoid strict
 // coupling between form schema and templates.
 export type FieldMapping = any;
+
+// Get localized form title based on locale
+export function getFormTitle(formId: string, locale: Locale): string {
+  if (locale === 'es') {
+    return getSpanishFormTitle(formId);
+  }
+  return formId;
+}
 
 export async function generatePDF(options: {
   returnDoc: any;
@@ -14,8 +23,9 @@ export async function generatePDF(options: {
   template: any; // mapping json
   watermark?: boolean;
   filename?: string;
+  locale?: Locale;
 }) {
-  const { returnDoc, fields, template, watermark = false, filename = 'output.pdf' } = options;
+  const { returnDoc, fields, template, watermark = false, filename = 'output.pdf', locale = 'en' } = options;
 
   // Resolve mapped values
   const resolved: any[] = [];
@@ -160,7 +170,9 @@ export async function generatePDF(options: {
 
     if (m.type === 'currency') {
       const num = Number(m.value) || 0;
-      const text = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+      // Use locale-aware currency formatting
+      const localeCode = locale === 'es' ? 'es-ES' : 'en-US';
+      const text = new Intl.NumberFormat(localeCode, { style: 'currency', currency: 'USD' }).format(num);
       p.drawText(String(text), { x, y, size: fontSize, font: helvetica, color });
       continue;
     }
@@ -180,6 +192,8 @@ export async function generatePDF(options: {
     watermark: !!watermark,
     generatedAt: Date.now(),
     returnId: returnDoc.returnId,
+    locale,
+    formTitle: template.form ? getFormTitle(template.form, locale) : undefined,
     pages: pages.map((pg: any, i: number) => ({ template: template.form, width: pg.getWidth(), height: pg.getHeight(), fields: resolved.filter((r: any) => (r.page || 0) === i).map((r: any) => ({ id: r.id, coordinates: r.coordinates, value: r.value, type: r.type })) })),
   };
 
@@ -208,4 +222,4 @@ function parseColor(color: string) {
   return rgb(0, 0, 0);
 }
 
-export default { generatePDF };
+export default { generatePDF, getFormTitle };
