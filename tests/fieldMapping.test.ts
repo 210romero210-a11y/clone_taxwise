@@ -86,9 +86,10 @@ describe('Field Mapping', () => {
 
       const result = mapExtractedFields(extractedFields, 'W2');
 
-      expect(result.length).toBe(2); // Only box1 and box2 have mappings
+      expect(result.length).toBe(3); // box1, box2, and employerName are all mapped
       expect(result.some(f => f.fieldId === '1040_totalIncome')).toBe(true);
       expect(result.some(f => f.fieldId === '1040_federalIncomeTaxWithheld')).toBe(true);
+      expect(result.some(f => f.fieldId === 'W2_employerName')).toBe(true);
     });
 
     it('should map 1099-DIV fields to SchB', () => {

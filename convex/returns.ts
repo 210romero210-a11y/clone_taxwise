@@ -119,7 +119,7 @@ export const recalculateReturn = mutation(
     handler: async ({ db }, args) => {
       await recalculateReturnLogic(db, args.returnId);
     }
-    }
+  }
 );
 
 export const setReturnLock = mutation({
@@ -129,7 +129,7 @@ export const setReturnLock = mutation({
     if (!user) throw new Error('Unauthorized');
     const ret = await db.query('returns').withIndex('byReturnId', (q: any) => q.eq('returnId', args.returnId)).first();
     if (!ret) throw new Error('Return not found');
-    await db.patch('returns', ret._id, { isLocked: !!args.locked, lockedAt: args.locked ? Date.now() : null, lockedBy: user.subject });
+    await db.patch('returns', ret._id, { isLocked: !!args.locked, lockedAt: args.locked ? Date.now() : undefined, lockedBy: user.subject });
     return { ok: true };
   }
 });

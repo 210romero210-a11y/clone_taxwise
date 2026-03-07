@@ -77,6 +77,7 @@ export default defineSchema({
     value: v.optional(v.any()),
     calculated: v.optional(v.boolean()),
     overridden: v.optional(v.boolean()),
+    estimated: v.optional(v.boolean()),
     updatedAt: v.optional(v.number()),
     lastModifiedBy: v.optional(v.string()),
   })

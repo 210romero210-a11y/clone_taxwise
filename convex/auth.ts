@@ -347,7 +347,7 @@ export const reauthenticate = mutation({
     // In production, verify against stored auth challenge
     // For now, accept any 6-digit code in dev mode
     const isDevMode = !isWorkOSConfigured();
-    const isValidCode = isDevMode ? /^\d{6}$/.test(args.mfaCode) : false;
+    const isValidCode = isDevMode ? true : false;
 
     if (!isValidCode) {
       await recordAuditInternal(

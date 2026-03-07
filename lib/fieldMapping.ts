@@ -74,6 +74,25 @@ export const W2_TO_1040_MAPPING: Record<string, { targetField: string; transform
   // 'W2.stateTax': { targetField: 'STATE.stateTax', formId: 'STATE' },
 };
 
+/**
+ * Maps W-2 metadata fields to W2 form fields
+ * These fields should be stored on the W2 form itself, not mapped to 1040
+ */
+export const W2_METADATA_MAPPING: Record<string, { targetField: string }> = {
+  // Employer information (Box b)
+  'W2.employerEIN': { targetField: 'W2.employerEIN' },
+  'W2.employerName': { targetField: 'W2.employerName' },
+  'W2.employerAddress': { targetField: 'W2.employerAddress' },
+  
+  // Employee information (Box e)
+  'W2.employeeFirstName': { targetField: 'W2.employeeFirstName' },
+  'W2.employeeLastName': { targetField: 'W2.employeeLastName' },
+  'W2.employeeSSN': { targetField: 'W2.employeeSSN' },
+  
+  // Control number (Box a)
+  'W2.controlNumber': { targetField: 'W2.controlNumber' },
+};
+
 // ============================================
 // 1099 to Tax Form Field Mappings
 // ============================================
@@ -239,6 +258,13 @@ function findMapping(fieldId: string): { targetField: string; formId: string } |
       return null;
     }
     
+    // First check W2 metadata mapping (fields that stay on W2 form)
+    const metadataMapping = W2_METADATA_MAPPING[fieldId];
+    if (metadataMapping) {
+      return { targetField: metadataMapping.targetField, formId: 'W2' };
+    }
+    
+    // Then check W2 to 1040 mapping (fields that flow to 1040)
     const mapping = W2_TO_1040_MAPPING[fieldId];
     if (mapping) {
       // W-2 always maps to 1040 for federal return
@@ -379,7 +405,14 @@ export function validateExtractedFields(
   requiredFields: string[]
 ): { valid: boolean; missingFields: string[]; errors: string[] } {
   const errors: string[] = [];
-  const presentFields = new Set(mappedFields.map(f => f.dotFieldId));
+  // Include both the target field (dotFieldId) and source field (documentFieldId) as present
+  const presentFields = new Set<string>();
+  for (const field of mappedFields) {
+    presentFields.add(field.dotFieldId);
+    if (field.documentFieldId) {
+      presentFields.add(field.documentFieldId);
+    }
+  }
   const missingFields: string[] = [];
   
   for (const required of requiredFields) {
@@ -440,6 +473,7 @@ export function validateExtractedFields(
 export default {
   DOCUMENT_TYPE_MAPPING,
   W2_TO_1040_MAPPING,
+  W2_METADATA_MAPPING,
   FORM_1099_MISC_MAPPING,
   FORM_1099_NEC_MAPPING,
   FORM_1099_DIV_MAPPING,

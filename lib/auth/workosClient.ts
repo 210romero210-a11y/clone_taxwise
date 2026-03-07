@@ -53,22 +53,18 @@ export function generateSessionToken(): string {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(bytes);
   } else if (typeof require !== 'undefined') {
-    // Fallback for older Node.js environments
+    // Fallback for older Node.js environments - use crypto module
     try {
       const cryptoModule = require('crypto');
       const randomBytes = cryptoModule.randomBytes(32);
       bytes.set(randomBytes);
     } catch {
-      // Last resort fallback - less secure
-      for (let i = 0; i < 32; i++) {
-        bytes[i] = Math.floor(Math.random() * 256);
-      }
+      // Last resort fallback - throw error instead of using insecure random
+      throw new Error('Secure random number generation not available');
     }
   } else {
-    // Last resort fallback - less secure
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = Math.floor(Math.random() * 256);
-    }
+    // No secure random available - throw error
+    throw new Error('Secure random number generation not available');
   }
   
   // Convert to hex string

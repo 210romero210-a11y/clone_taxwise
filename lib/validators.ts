@@ -76,7 +76,7 @@ function dependentAgeRule(fields: FieldDoc[]): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const ctcClaim = fields.find(f => {
     const fid = normalizedId(f).replace(/\./g, '').toLowerCase();
-    return (/ctc|childtaxcredit/i.test(fid) || /childtaxcredit/i.test(fid)) && (f.value === true || f.value === 'yes' || f.value === '1' || f.value === 1);
+    return (/ctc|childtaxcredit/i.test(fid)) && (f.value === true || f.value === 'yes' || f.value === '1' || f.value === 1);
   });
   if (!ctcClaim) return diagnostics;
 
@@ -99,11 +99,13 @@ function dependentAgeRule(fields: FieldDoc[]): Diagnostic[] {
         }
       }
     }
-    if (age !== null && age >= 18) {
+    // CTC is for children under 17 (or under 18 with earned income in 2021+)
+    // Flag if dependent is 17 or older as they don't qualify for CTC
+    if (age !== null && age >= 17) {
       diagnostics.push({
         fieldId: normalizedId(f),
-        severity: 'error',
-        message: 'Dependent appears too old for Child Tax Credit',
+        severity: 'warning',
+        message: 'Dependent age 17+ may not qualify for Child Tax Credit (CTC)',
         form: f.formId || '',
       });
     }
