@@ -1,9 +1,16 @@
 import { canonicalDot, parseDotKey } from './fieldIds';
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
-import * as fs from 'fs';
-import * as path from 'path';
 import { maybeDecryptValue } from './encryption';
 import { Locale, getSpanishFormTitle, formatCurrency as formatCurrencyHelper } from './i18n/translator';
+
+// Node.js fs for local file reading (only available in Node runtime)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let fs: typeof import('fs') | null = null;
+try {
+  fs = require('fs');
+} catch (e) {
+  // Browser runtime - fs not available
+}
 
 // Flexible mappings use `any` intentionally for speed and to avoid strict
 // coupling between form schema and templates.
@@ -69,9 +76,8 @@ export async function generatePDF(options: {
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // Try to embed a background PDF if template provides a template_url and the
-  // file can be resolved locally (public/) or fetched remotely. Fall back to
-  // a blank page if no background is available.
+  // Try to load background PDF if template provides a template_url
+  // Supports: remote URLs (https://...), local paths (/forms/...), or Node fs paths
   let pages: any[] = [];
   let pageWidth = template.dimensions?.width || 612;
   let pageHeight = template.dimensions?.height || 792;
@@ -79,21 +85,47 @@ export async function generatePDF(options: {
   let bgBytes: Uint8Array | null = null;
   if (template.template_url) {
     const urlStr = String(template.template_url || '');
-    // local file under public/
-    const rel = urlStr.replace(/^\//, '');
-    const localPath = path.join(process.cwd(), 'public', rel);
     try {
-      if (fs.existsSync(localPath)) {
-        bgBytes = fs.readFileSync(localPath);
-      } else if (/^https?:\/\//i.test(urlStr) && typeof fetch === 'function') {
+      // Check if it's a remote URL
+      if (/^https?:\/\//i.test(urlStr)) {
         const res = await fetch(urlStr);
         if (res.ok) {
           const ab = await res.arrayBuffer();
-          bgBytes = Buffer.from(ab);
+          bgBytes = new Uint8Array(ab);
+        }
+      } else {
+        // Local file - try Node.js fs first (works in Convex Node runtime)
+        if (fs) {
+          const path = require('path');
+          // Try multiple possible locations
+          const possiblePaths = [
+            path.join(process.cwd(), 'public', urlStr.replace(/^\//, '')),
+            path.join(process.cwd(), urlStr.replace(/^\//, '')),
+            urlStr,
+          ];
+          for (const localPath of possiblePaths) {
+            try {
+              if (fs.existsSync(localPath)) {
+                const fileBuffer = fs.readFileSync(localPath);
+                bgBytes = new Uint8Array(fileBuffer);
+                break;
+              }
+            } catch {
+              // Try next path
+            }
+          }
+        }
+        // Fallback: try HTTP fetch for local paths (e.g., if served by Next.js)
+        if (!bgBytes) {
+          const res = await fetch(urlStr.startsWith('/') ? urlStr : '/' + urlStr);
+          if (res.ok) {
+            const ab = await res.arrayBuffer();
+            bgBytes = new Uint8Array(ab);
+          }
         }
       }
     } catch (e) {
-      // ignore background loading errors
+      // ignore background loading errors - PDF will be generated without background
       bgBytes = null;
     }
   }
@@ -184,7 +216,21 @@ export async function generatePDF(options: {
   }
 
   const pdfBytes = await pdfDoc.save();
-  const base64 = Buffer.from(pdfBytes).toString('base64');
+  
+  // Convert to base64 - handle both Node.js Buffer and Uint8Array
+  let base64: string;
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(pdfBytes)) {
+    // Node.js environment
+    base64 = pdfBytes.toString('base64');
+  } else {
+    // Browser environment or Uint8Array
+    const bytes = pdfBytes instanceof Uint8Array ? pdfBytes : new Uint8Array(pdfBytes);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    base64 = btoa(binary);
+  }
 
   const report = {
     filename,
